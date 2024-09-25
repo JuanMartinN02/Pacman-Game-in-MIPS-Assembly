@@ -5,10 +5,10 @@ This project is a Pacman game developed using MIPS assembly language, where memo
 Features:
 
 Pacman game logic implemented in MIPS Assembly.
-Randomly generated coins and enemies for increased replayability.
-Enemies follow random movement patterns, enhancing the challenge.
-Memory mapping to manage the game environment and interactions.
-Technologies:
+-Randomly generated coins and enemies for increased replayability.
+-Enemies follow random movement patterns, enhancing the challenge.
+-Memory mapping to manage the game environment and interactions.
 
-MIPS Assembly
-Memory management techniques
+Technologies:
+-MIPS Assembly
+-Memory management techniques
