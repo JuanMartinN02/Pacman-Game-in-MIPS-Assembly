@@ -1,0 +1,568 @@
+.macro conversion %score, %numeroSistema, %print, %cadena1, %cadena2
+  		
+    	lw $t8 %score
+	li $s7, %numeroSistema
+	li $t1 0
+	li $t0 0
+	loopConversion:
+		beqz $t8 finConversion
+		div $t8, $s7
+		mfhi $t9
+		mflo $t8
+	
+		addi $t9 $t9 48
+		sb $t9 %cadena1($t1)
+		
+		addi $t1, $t1, 1
+		b loopConversion
+	finConversion:
+	subi $t1, $t1, 1
+	Voltear:
+		
+		lb $t2, %cadena1($t1)
+		sb $t2, %cadena2($t0)
+		subi $t1, $t1, 1
+		addi $t0, $t0, 1
+		bgez $t1, Voltear
+		
+	li $v0, 4            
+    	la $a0, espacio     
+   	syscall	
+	
+	li $v0, 4            
+    	la $a0, %print   
+   	syscall 
+   		
+	li $v0, 4
+	la $a0, %cadena2
+	syscall	
+	
+.end_macro
+
+
+.macro conversionHexa %score, %print, %cadena
+
+	lw $t0 %score
+	li $s0 0x0F # En $s0 esta la mascara para mostrar solo 4 bits
+
+	li $t9 28 # Desplazamiento
+	li $t1 0 # $t1 es un contador para recorrer las posiciones de la cadena
+	loopConversion:
+	bltz $t9 finConversion
+
+		srlv $t2 $t0 $t9 # Se desplaza para que en los ultimos 4 bits de $t2 este el digito a convertir
+		and $t2 $t2 $s0 # Aplicamos la mascara
+	
+		bge $t2 0xA esLetra # Condicion para saber si es una letra
+	
+		esDigito:
+		addi $t2 $t2 48 # Se pasa a su valor ascii
+	
+	b finCategorizacion
+	
+		esLetra:
+		addi $t2 $t2 55 #se suma 55 para llevar de numero a letra
+		  
+	
+	b finCategorizacion
+	
+	finCategorizacion:
+	
+	sb $t2 %cadena($t1)
+	addi $t1 $t1 1
+	addi $t9 $t9 -4
+	b loopConversion
+
+finConversion:
+
+
+li $v0 4
+la $a0 espacio
+syscall
+
+li $v0 4
+la $a0 %print
+syscall
+
+li $v0 4
+la $a0 %cadena
+syscall
+
+.end_macro
+
+
+.data
+	bitmap: .word 0x10010000 # Esta es la direccion del bitmap
+	keyboard: .word 0xffff0004 # Direccion donde se captura el Keyboard (ASCII code)
+
+	#Array donde los 0's representan el camino y los 1's las paredes
+	
+	laberinto: .word 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+			1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,
+			1,0,1,0,1,1,1,1,1,0,0,0,1,0,1,1,
+			1,0,0,0,0,0,0,0,0,0,1,0,1,0,1,1,
+			1,0,1,1,1,1,1,1,1,1,1,1,1,0,1,1,
+			1,0,1,0,1,0,0,0,0,0,0,0,1,0,0,0,
+			0,0,1,0,1,1,1,0,1,1,1,0,1,0,1,1,
+			1,0,0,0,0,0,1,0,1,0,1,0,0,0,1,1,
+			1,0,1,1,1,0,1,0,1,0,1,1,1,1,1,1,
+			1,0,1,0,1,0,1,0,1,0,1,0,0,0,0,1,
+			1,1,1,0,0,0,1,0,0,0,1,0,1,1,0,0,
+			0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,
+			1,1,1,0,1,1,1,1,1,0,1,1,1,0,0,1,
+			1,0,0,0,0,0,1,0,0,0,0,0,0,0,1,1,
+			1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,
+			1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1
+			
+	amarillo: .word 0xFFFF00
+	moradoOscuro: .word 0x8442f5
+	moradoClaro: .word 0xe1d2fa
+	verde: .word 0x35e835
+	colorJugador: .word 0x000080	
+	rojo: .word 0xFF0000	
+	
+	derrota: .asciiz "Te mato un enemigo, perdiste!!!"
+	espacio: .asciiz "\n"
+	score: .word 0  #Score de las monedas
+	scorePrint: .asciiz "Tu score fue: "
+	conversionesPrint: .asciiz "Las conversiones son:"
+	hexaPrint: .asciiz "En hexadecimal -> "
+	octalPrint: .asciiz "En octal -> "
+	binarioPrint: .asciiz "En binario -> "
+	numeroHexa: .space 9
+	numeroBinario: .space 32
+	numeroBinarioReal: .space 32
+	numeroOctal: .space 11
+	numeroOctalReal: .space 11 
+	
+.text
+
+		lw $t0, bitmap # En $t0 esta la direccion de memoria de cada pixel del bitmap
+		li $t4, 256 # En $t4 esta el numero de pixeles por pintar
+		la $s0, laberinto 
+		
+		jal dibujarLaberinto
+
+	Moverse:
+	
+		li $v0, 12
+		syscall 
+		move $t3, $v0	
+		
+		beq $t3, 97, izquierda # a
+		beq $t3, 119, arriba # w
+		beq $t3, 115, abajo # s
+		beq $t3, 100, derecha # d
+
+		b Moverse # En cualquiera de las otras letras inesperadas, vuelve al principio del loop
+	
+		derecha:
+		addi $t7, $t0, 4
+		lw $t5, ($t7)
+		lw $s2, moradoOscuro
+		beq $t5, $s2, Moverse # Si hay una pared adelante no se mueve
+		lw $s1, moradoClaro
+		sw $s1, ($t0) # Cargamos el color blanco en el pixel donde estaba.
+		addi $t0, $t0, 4 # Aumentamos un pixel en el canvas del bitmap
+		lw $s1, colorJugador
+		sw $s1, ($t0) # Pintamos el color del jugador donde cay�
+		#jal MovEnemigo1
+		#jal MovEnemigo2
+		lw $s2, verde
+		beq $t5, $s2, Ganar
+		lw $s2, rojo
+		beq $t5, $s2, Perder #ENEMIGO
+		lw $s2, amarillo
+		beq $t5, $s2, pickCoin
+		jal MovEnemigo1
+		jal MovEnemigo2
+		b Moverse
+		
+		abajo:
+		addi $t7, $t0, 64
+		lw $t5, ($t7)
+		lw $s2, moradoOscuro
+		beq $t5, $s2, Moverse # Si hay una pared adelante no se mueve
+		lw $s1, moradoClaro
+		sw $s1, ($t0) # Cargamos el color blanco en el pixel donde estaba.
+		addi $t0, $t0, 64 # Como necesitamos recorrer toda una fila hasta llegar a la
+		lw $s1, colorJugador
+		sw $s1, ($t0) # Pintamos el color del jugador donde cay�
+		#jal MovEnemigo1
+		#jal MovEnemigo2
+		lw $s2, verde
+		beq $t5, $s2, Ganar
+		lw $s2, rojo
+		beq $t5, $s2, Perder #ENEMIGO
+		lw $s2, amarillo
+		beq $t5, $s2, pickCoin
+		jal MovEnemigo1
+		jal MovEnemigo2
+		b Moverse
+		
+		izquierda:
+		addi $t7, $t0, -4
+		lw $t5, ($t7)
+		lw $s2, moradoOscuro
+		beq $t5, $s2, Moverse # Si hay una pared adelante no se mueve
+		lw $s1, moradoClaro
+		sw $s1, ($t0) # Cargamos el color blanco en el pixel donde estaba.
+		addi $t0, $t0, -4 # Aumentamos un pixel en el canvas del bitmap
+		lw $s1, colorJugador
+		sw $s1, ($t0) # Pintamos el color del jugador donde cay�
+		#jal MovEnemigo1
+		#jal MovEnemigo2
+		lw $s2, verde
+		beq $t5, $s2, Ganar
+		lw $s2, rojo
+		beq $t5, $s2, Perder #ENEMIGO
+		lw $s2, amarillo
+		beq $t5, $s2, pickCoin
+		jal MovEnemigo1
+		jal MovEnemigo2
+		b Moverse
+		
+		arriba:
+		addi $t7, $t0, -64
+		lw $t5, ($t7)
+		lw $s2, moradoOscuro
+		beq $t5, $s2, Moverse # Si hay una pared adelante no se mueve
+		lw $s1, moradoClaro
+		sw $s1, ($t0) # Cargamos el color blanco en el pixel donde estaba.
+		addi $t0, $t0, -64 # Aumentamos un pixel en el canvas del bitmap
+		lw $s1, colorJugador
+		sw $s1, ($t0) # Pintamos el color del jugador donde cay�
+		#jal MovEnemigo1
+		#jal MovEnemigo2
+		lw $s2, verde
+		beq $t5, $s2, Ganar
+		lw $s2, rojo
+		beq $t5, $s2, Perder #ENEMIGO
+		lw $s2, amarillo
+		beq $t5, $s2, pickCoin
+		jal MovEnemigo1
+		jal MovEnemigo2
+		b Moverse
+	
+	dibujarLaberinto:
+		
+		beqz $t4 finDibujar # Condicion de parada, cuando ya se hayan pintado todos los pixeles
+		
+		lw $a0, ($s0) # En $a0 estara el elemento que esta en la posicion del arreglo
+		
+		beq $a0, 1, colorearPared # Si es 1, se colorea el la pared de morado oscuro
+		beq $a0, 0, colorearEspacio # Si es un 0, se colorea el espacio de morado claro
+		
+		b dibujarLaberinto
+		
+		colorearPared:
+		
+		lw $s1, moradoOscuro
+		sw $s1, ($t0) # Se carga el color al pixel del bitmap correspondiente
+				
+		addi $t4, $t4, -1 # Se resta 1 a la cantidad de pixeles por pintar
+		addi $t0, $t0, 4 # Se suman 4 bits a la posicion de memoria para seguir al siguiente pixel del bitmap
+		
+		
+		addi $s0, $s0, 4 # Se suma 4 al arreglo para seguir a la siguiente posicion 
+
+		b dibujarLaberinto # Vuelve al loop para seguir rellenando el laberinto
+		
+		colorearEspacio:
+		beq $t4 3 colorearV #Colorea la meta en verde 
+		bne $t4 3 colorearM #Colorea un espacio esn morado claro
+		
+		
+		colorearV:
+		lw $s1, verde
+		sw $s1, ($t0) # Se carga el color al pixel del bitmap correspondiente
+		b continuar
+		
+		colorearM:
+		lw $s1, moradoClaro
+		sw $s1, ($t0) # Se carga el color al pixel del bitmap correspondiente
+		b continuar
+		
+		continuar:
+		
+		addi $t4, $t4, -1 # Se resta 1 a la cantidad de pixeles por pintar
+		addi $t0, $t0, 4 # Se suman 4 bits a la posicion de memoria para seguir al siguiente pixel del bitmap
+		addi $s0, $s0, 4 # Se suma en 4 el arreglo para seguir a su siguiente posicion
+		
+		b dibujarLaberinto # Vuelve al loop para seguir rellenando el laberint
+		
+	finDibujar: 
+	
+		lw $s1, rojo 
+		spawnEnemies:
+		la $s3, bitmap # Vamos a cargar de nuevo el bitmap para pintar al enemigo
+		addi $s3, $s3, 224
+		sw $s1, ($s3) # Lo pintamos 
+		
+		la $s4, bitmap # Vamos a cargar de nuevo el bitmap para pintar al enemigo 2
+		addi $s4, $s4, 736
+		sw $s1, ($s4) # Lo pintamos 
+		
+		spawnPlayer:
+		la $t0, bitmap # Vamos a cargar de nuevo el bitmap para pintar al jugador
+		addi $t0, $t0, 68
+		lw $s1, colorJugador
+		sw $s1, ($t0) # Lo pintamos
+		
+		li $s6, 0
+
+			
+		spawnCoins:
+		
+			la $t0, bitmap # Cargamos la posici�n de memoria del primer pixel del mapa
+		
+				numeroDivisibleEntre4:
+				li $a0, 0      # ID del generador de n�meros pseudorandom
+				li $a1, 1024     # L�mite superior del rango de valores
+				li $v0, 42
+				syscall     # Generar el n�mero aleatorio
+				li $s7, 4
+				div $a0, $s7
+				mfhi $s7
+				bnez $s7, numeroDivisibleEntre4
+				
+			add $t0, $t0, $a0 # Se le suma a %t0 para llevarlo a ese rango
+			lw $s7, ($t0)
+			bne $s7, 0xe1d2fa, spawnCoins # Si en la posici�n generada hay una pared, se vuelve al inicio del bucle
+			lw $s7, amarillo
+			sw $s7, ($t0)
+			addi $s6, $s6, 1
+			blt $s6, 4, spawnCoins
+			la $t0, bitmap
+			addi $t0,$t0, 68
+			jr $ra
+				
+	MovEnemigo1:
+		li $v0, 42
+		li $a1, 4
+		syscall
+		
+		beq $a0, 0, Enem1Der
+		beq $a0, 1, Enem1Izq
+		beq $a0, 2, Enem1Abajo
+		beq $a0, 3, Enem1Arriba
+		
+		FinMovEnem1:
+		jr $ra
+		
+	Enem1Der:
+		addi $s5, $s3, 4
+		lw $t5, ($s5)
+		lw $s2, verde
+		beq $t5, $s2, MovEnemigo1
+		lw $s2, moradoOscuro
+		beq $t5, $s2, MovEnemigo1 # Si hay una pared adelante no se mueve
+		lw $s1, moradoClaro
+		sw $s1, ($s3) # Cargamos el color blanco en el pixel donde estaba.
+		addi $s3, $s3, 4 # Aumentamos un pixel en el canvas del bitmap
+		lw $s1, rojo
+		sw $s1, ($s3) # Pintamos el color del jugador donde cay�
+		lw $s2, colorJugador
+		beq $t5, $s2, Perder #ENEMIGO
+		b FinMovEnem1
+		
+	Enem1Izq:
+		addi $s5, $s3, -4
+		lw $t5, ($s5)
+		lw $s2, verde
+		beq $t5, $s2, MovEnemigo1
+		lw $s2, moradoOscuro
+		beq $t5, $s2, MovEnemigo1 # Si hay una pared adelante no se mueve
+		lw $s1, moradoClaro
+		sw $s1, ($s3) # Cargamos el color blanco en el pixel donde estaba.
+		addi $s3, $s3, -4 # Aumentamos un pixel en el canvas del bitmap
+		lw $s1, rojo
+		sw $s1, ($s3) # Pintamos el color del jugador donde cay�
+		lw $s2, colorJugador
+		beq $t5, $s2, Perder #ENEMIGO
+		b FinMovEnem1
+		
+	Enem1Abajo:
+		addi $s5, $s3, 64
+		lw $t5, ($s5)
+		lw $s2, verde
+		beq $t5, $s2, MovEnemigo1
+		lw $s2, moradoOscuro
+		beq $t5, $s2, MovEnemigo1 # Si hay una pared adelante no se mueve
+		lw $s1, moradoClaro
+		sw $s1, ($s3) # Cargamos el color blanco en el pixel donde estaba.
+		addi $s3, $s3, 64 # Aumentamos un pixel en el canvas del bitmap
+		lw $s1, rojo
+		sw $s1, ($s3) # Pintamos el color del jugador donde cay�
+		lw $s2, colorJugador
+		beq $t5, $s2, Perder #ENEMIGO
+		b FinMovEnem1
+	
+	Enem1Arriba:
+		addi $s5, $s3, -64
+		lw $t5, ($s5)
+		lw $s2, verde
+		beq $t5, $s2, MovEnemigo1
+		lw $s2, moradoOscuro
+		beq $t5, $s2, MovEnemigo1 # Si hay una pared adelante no se mueve
+		lw $s1, moradoClaro
+		sw $s1, ($s3) # Cargamos el color blanco en el pixel donde estaba.
+		addi $s3, $s3, -64 # Aumentamos un pixel en el canvas del bitmap
+		lw $s1, rojo
+		sw $s1, ($s3) # Pintamos el color del jugador donde cay�
+		lw $s2, colorJugador
+		beq $t5, $s2, Perder #ENEMIGO
+		b FinMovEnem1
+		
+		
+		
+	MovEnemigo2:
+		li $v0, 42
+		li $a1, 4
+		syscall
+		
+		beq $a0, 0, Enem2Der
+		beq $a0, 1, Enem2Izq
+		beq $a0, 2, Enem2Abajo
+		beq $a0, 3, Enem2Arriba
+		
+		FinMovEnem2:
+		jr $ra
+		
+	Enem2Der:
+		addi $t8, $s4, 4
+		lw $t5, ($t8)
+		lw $s2, verde
+		beq $t5, $s2, MovEnemigo2
+		lw $s2, moradoOscuro
+		beq $t5, $s2, MovEnemigo2 # Si hay una pared adelante no se mueve
+		lw $s1, moradoClaro
+		sw $s1, ($s4) # Cargamos el color blanco en el pixel donde estaba.
+		addi $s4, $s4, 4 # Aumentamos un pixel en el canvas del bitmap
+		lw $s1, rojo
+		sw $s1, ($s4) # Pintamos el color del jugador donde cay�
+		lw $s2, colorJugador
+		beq $t5, $s2, Perder #ENEMIGO
+		b FinMovEnem2
+		
+	Enem2Izq:
+		addi $t8, $s4, -4
+		lw $t5, ($t8)
+		lw $s2, verde
+		beq $t5, $s2, MovEnemigo2
+		lw $s2, moradoOscuro
+		beq $t5, $s2, MovEnemigo2 # Si hay una pared adelante no se mueve
+		lw $s1, moradoClaro
+		sw $s1, ($s4) # Cargamos el color blanco en el pixel donde estaba.
+		addi $s4, $s4, -4 # Aumentamos un pixel en el canvas del bitmap
+		lw $s1, rojo
+		sw $s1, ($s4) # Pintamos el color del jugador donde cay�
+		lw $s2, colorJugador
+		beq $t5, $s2, Perder #ENEMIGO
+		b FinMovEnem2
+		
+	Enem2Abajo:
+		addi $t8, $s4, 64
+		lw $t5, ($t8)
+		lw $s2, verde
+		beq $t5, $s2, MovEnemigo2
+		lw $s2, moradoOscuro
+		beq $t5, $s2, MovEnemigo2 # Si hay una pared adelante no se mueve
+		lw $s1, moradoClaro
+		sw $s1, ($s4) # Cargamos el color blanco en el pixel donde estaba.
+		addi $s4, $s4, 64 # Aumentamos un pixel en el canvas del bitmap
+		lw $s1, rojo
+		sw $s1, ($s4) # Pintamos el color del jugador donde cay�
+		lw $s2, colorJugador
+		beq $t5, $s2, Perder #ENEMIGO
+		b FinMovEnem2
+	
+	Enem2Arriba:
+		addi $t8, $s4, -64
+		lw $t5, ($t8)
+		lw $s2, verde
+		beq $t5, $s2, MovEnemigo2
+		lw $s2, moradoOscuro
+		beq $t5, $s2, MovEnemigo2 # Si hay una pared adelante no se mueve
+		lw $s1, moradoClaro
+		sw $s1, ($s4) # Cargamos el color blanco en el pixel donde estaba.
+		addi $s4, $s4, -64 # Aumentamos un pixel en el canvas del bitmap
+		lw $s1, rojo
+		sw $s1, ($s4) # Pintamos el color del jugador donde cay�
+		lw $s2, colorJugador
+		beq $t5, $s2, Perder #ENEMIGO
+		b FinMovEnem2
+	
+		
+	pickCoin:
+	
+		#$t9 se va a usar para el score
+		lw $t9, score     # Carga el score
+    		addi $t9, $t9, 15  # Suma 5 al score
+    		sw $t9, score     # Guarda el score nuevo
+    		b Moverse
+	
+	Ganar:	
+		# Display del score
+		li $v0, 4            
+    		la $a0, espacio     
+   		syscall
+		li $v0, 4            
+    		la $a0, scorePrint     
+   		syscall 
+   		
+    		lw $a0, score 
+    		li $v0, 1      
+    		syscall
+    		
+    		li $v0, 4            
+    		la $a0, espacio     
+   		syscall
+    		
+    		li $v0, 4
+		la $a0, conversionesPrint
+		syscall
+    		
+    		conversion score, 2, binarioPrint, numeroBinario, numeroBinarioReal
+    		conversion score, 8, octalPrint, numeroOctal, numeroOctalReal
+    		conversionHexa score, hexaPrint, numeroHexa
+    		
+		li $v0 10
+		syscall
+		
+	Perder:
+		#mensaje de derrota
+		li $v0, 4            
+    		la $a0, espacio     
+   		syscall
+		li $v0, 4            
+    		la $a0, derrota      
+   		syscall 
+   		# Display del score
+   		li $v0, 4            
+    		la $a0, espacio     
+   		syscall
+   		
+   		li $v0, 4            
+    		la $a0, scorePrint     
+   		syscall 
+   		
+   		lw $a0, score
+    		li $v0, 1      
+    		syscall
+    		
+    		li $v0, 4            
+    		la $a0, espacio     
+   		syscall
+   		
+   		li $v0, 4
+		la $a0, conversionesPrint
+		syscall
+    		
+    		conversion score, 2, binarioPrint, numeroBinario, numeroBinarioReal
+    		conversion score, 8, octalPrint, numeroOctal, numeroOctalReal
+    		conversionHexa score, hexaPrint, numeroHexa
+    		
+		li $v0 10
+		syscall
+	
